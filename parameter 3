@@ -1,0 +1,61 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import emcee
+
+
+data = pd.read_csv("https://raw.githubusercontent.com/asegura4488/Database/main/MetodosComputacionalesReforma/Gaussiano.csv")
+
+x= np.array(data.T)[0]
+
+def LogPrior(p): 
+    mu, sigma = p 
+    if 3 <= mu <= 5. and 0.5 <= sigma <= 3.5:
+        return 0.
+    else:
+        return -np.inf
+    
+def Gauss(p,x):
+    mu, sigma = p
+    return np.exp( -0.5*(x-mu)**2/sigma**2  )/np.sqrt(2*np.pi*sigma**2)
+
+def Likelihood(p,x):
+    return Gauss(p,x)
+
+def JointLikelihood(p,x):
+    return np.sum( np.log(Likelihood(p,x)) )
+
+def LogPosterior(p,x):
+    LogP = LogPrior(p)
+    if not np.isfinite(LogP):
+        return -np.inf
+    else:
+        return JointLikelihood(p,x) + LogP
+
+n_walkers, n_params = 5, 2
+p0 = np.zeros((n_walkers,n_params))
+p0[:,0] = 2.
+p0[:,1] = 2.
+p0 += np.random.rand(n_walkers,n_params)
+
+sampler = emcee.EnsembleSampler(n_walkers,n_params,LogPosterior,args=[x])
+pos,prob,state = sampler.run_mcmc(p0,int(2e4),progress=True)
+
+fig, axes = plt.subplots(n_params, figsize=(10, 5), sharex=True)
+
+samples = sampler.get_chain()
+labels = ["$\mu$","$\sigma$"]
+
+for i in range(n_params):
+    ax = axes[i]
+    ax.plot(samples[:,:,i], "k", alpha=0.7)
+    ax.set_xlim(0, len(samples))
+    ax.set_ylabel(labels[i],rotation=0, fontsize=15)
+    ax.yaxis.set_label_coords(-0.1, 0.5)
+
+axes[-1].set_xlabel("step number",fontsize=15)
+
+flat_samples = sampler.get_chain(discard=1000, thin=15, flat=True)
+truths = np.percentile(flat_samples, 50, axis=0)
+
+print(truths)
